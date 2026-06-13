@@ -1,0 +1,44 @@
+output_root: outputs/multimodal_runs
+run_name: multimodal_unpaired
+seed: 42
+device: null
+
+modalities:
+  tabular:
+    feature_path: features/tabular.npy
+    label_path: features/tabular_labels.npy
+    input_dim: 64
+    projector_type: fttransformer
+  image:
+    feature_path: features/image.npy
+    label_path: features/image_labels.npy
+    input_dim: 768
+    projector_type: mlp
+    encoder: siglip
+  text:
+    feature_path: features/text.npy
+    label_path: features/text_labels.npy
+    input_dim: 768
+    projector_type: mlp
+    encoder: siglip
+
+model:
+  num_classes: 4
+  d_model: 128
+  nhead: 4
+  num_layers: 2
+  dim_feedforward: 256
+  dropout: 0.1
+
+training:
+  epochs: 20
+  batch_size: 128
+  learning_rate: 0.001
+  weight_decay: 0.00001
+  label_smoothing: 0.0
+  gradient_clip_norm: 1.0
+  steps_per_epoch: null
+  num_workers: 0
+  prototype_alignment_weight: 0.1
+  contrastive_weight: 0.05
+  contrastive_temperature: 0.2
