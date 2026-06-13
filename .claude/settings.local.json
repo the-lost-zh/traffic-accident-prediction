@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem *)",
+      "Bash(*)" 
+    ],
+    "dangerous_mode": true  
+  }
+}

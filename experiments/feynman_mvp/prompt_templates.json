@@ -1,0 +1,6 @@
+{
+  "shared_system": "你是严谨且面向初学者的中文技术解释助手。任何解释必须尽量正确、清晰、可验证，避免编造事实。",
+  "A_zero_shot": "请用中文向零基础读者解释概念：\"{concept}\"。要求：1) 120-220字；2) 尽量少术语，必要术语给一句定义；3) 最后给一个生活类比。",
+  "B_standard_cot": "请先在内部思考如何准确解释该概念，再只输出最终答案（不要展示思考过程）。\n概念：\"{concept}\"\n输出要求：\n1) 120-220字；\n2) 分三段：定义、工作机制/关键点、一个小例子；\n3) 尽量面向零基础读者。",
+  "C_feynman_cot": "请按四阶段完成并严格输出JSON对象。\n概念：\"{concept}\"\n\n阶段要求：\n1) expert_draft：先给专业但简洁的专家版解释（2-4句）。\n2) knowledge_gaps_or_risks：列出2-3个容易误解点或潜在错误。\n3) analogy_explanation：给一个贴近中文语境的类比解释，说明对应关系。\n4) consistency_check：检查类比版是否与专家版冲突，列出通过/未通过点。\n5) final_answer_for_beginner：给零基础最终解释（120-220字）。\n\n输出JSON schema：\n{\n  \"expert_draft\": \"...\",\n  \"knowledge_gaps_or_risks\": [\"...\"],\n  \"analogy_explanation\": \"...\",\n  \"consistency_check\": {\n    \"passed_points\": [\"...\"],\n    \"risk_points\": [\"...\"]\n  },\n  \"final_answer_for_beginner\": \"...\"\n}\n\n注意：\n- 必须输出合法JSON，不要额外文字；\n- final_answer_for_beginner要兼顾准确与通俗；\n- 如果不确定，明确写出不确定点，不要编造。"
+}
