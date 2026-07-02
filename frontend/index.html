@@ -10,28 +10,31 @@
     <div class="container">
         <header>
             <h1>交通事故损伤等级预测系统</h1>
-            <p>基于机器学习的智能预测工具</p>
+            <p>基于多模态深度学习的智能预测工具</p>
         </header>
-        
+
         <main>
             <section class="form-section">
-                <h2>输入事故参数</h2>
-                <form id="prediction-form">
+                <div class="mode-tabs">
+                    <button class="mode-tab active" onclick="switchMode('tabular')">表格预测</button>
+                    <button class="mode-tab" onclick="switchMode('multimodal')">多模态预测</button>
+                </div>
+
+                <!-- ===== Tabular form ===== -->
+                <form id="tabular-form" class="mode-form active">
+                    <h2>输入事故参数</h2>
                     <div class="form-group">
                         <label for="start_lng">起始经度 (Start_Lng):</label>
                         <input type="number" id="start_lng" name="start_lng" step="0.0001" required>
                     </div>
-                    
                     <div class="form-group">
                         <label for="start_lat">起始纬度 (Start_Lat):</label>
                         <input type="number" id="start_lat" name="start_lat" step="0.0001" required>
                     </div>
-                    
                     <div class="form-group">
                         <label for="distance">事故距离 (Distance(mi)):</label>
                         <input type="number" id="distance" name="distance" step="0.01" min="0" required>
                     </div>
-                    
                     <div class="form-group">
                         <label for="junction">是否在路口 (Junction):</label>
                         <select id="junction" name="junction" required>
@@ -39,7 +42,6 @@
                             <option value="1">是</option>
                         </select>
                     </div>
-                    
                     <div class="form-group">
                         <label for="weather_condition">天气状况 (Weather_Condition):</label>
                         <select id="weather_condition" name="weather_condition" required>
@@ -50,33 +52,54 @@
                             <option value="4">雾天</option>
                         </select>
                     </div>
-                    
                     <div class="form-group">
                         <label for="temperature">温度 (Temperature(F)):</label>
                         <input type="number" id="temperature" name="temperature" step="0.1" required>
                     </div>
-                    
                     <div class="form-group">
                         <label for="humidity">湿度 (Humidity(%)):</label>
                         <input type="number" id="humidity" name="humidity" min="0" max="100" required>
                     </div>
-                    
                     <div class="form-group">
                         <label for="pressure">气压 (Pressure(in)):</label>
                         <input type="number" id="pressure" name="pressure" step="0.01" required>
                     </div>
-                    
                     <div class="form-group">
                         <label for="visibility">能见度 (Visibility(mi)):</label>
                         <input type="number" id="visibility" name="visibility" step="0.1" min="0" required>
                     </div>
-                    
                     <div class="form-group">
                         <label for="wind_speed">风速 (Wind_Speed(mph)):</label>
                         <input type="number" id="wind_speed" name="wind_speed" step="0.1" min="0" required>
                     </div>
-                    
                     <button type="submit" class="submit-btn">预测损伤等级</button>
+                </form>
+
+                <!-- ===== Multimodal form ===== -->
+                <form id="multimodal-form" class="mode-form" enctype="multipart/form-data">
+                    <h2>多模态输入（可选填一项或多项）</h2>
+
+                    <fieldset>
+                        <legend>表格数据</legend>
+                        <p class="hint">与单模态预测相同的10项参数</p>
+                        <div id="mm-tabular-fields"></div>
+                        <button type="button" class="toggle-btn" onclick="toggleTabularFields()">展开/收起表格字段</button>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>文本描述</legend>
+                        <label for="mm-text">事故文本描述:</label>
+                        <textarea id="mm-text" name="text" rows="4" placeholder="例如：早高峰时段，路口发生追尾事故，路面湿滑..."></textarea>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>事故现场图片</legend>
+                        <label for="mm-image">上传事故现场图片:</label>
+                        <input type="file" id="mm-image" name="image" accept="image/*">
+                        <div id="image-preview" class="image-preview"></div>
+                    </fieldset>
+
+                    <button type="submit" class="submit-btn">多模态预测损伤等级</button>
                 </form>
             </section>
             
