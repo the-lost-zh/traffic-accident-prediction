@@ -72,16 +72,18 @@ def predict():
         }
 
         _ensure_agent()
-        if agent.is_loaded:
-            try:
-                result = agent.predict_with_explanation(mapped_data)
-                result['message'] = 'Tabular prediction success'
-                return jsonify(result), 200
-            except Exception as exc:
-                print(f"Agent prediction failed: {exc}")
+        if not agent.is_loaded:
+            return jsonify({
+                'error': 'Model not loaded. Train a model first or set MODEL_DIR to a directory '
+                         'containing preprocessor.pkl and a model checkpoint.'
+            }), 503
 
-        print("Falling back to simulation")
-        return _fallback_tabular(data)
+        try:
+            result = agent.predict_with_explanation(mapped_data)
+            result['message'] = 'Prediction success'
+            return jsonify(result), 200
+        except Exception as exc:
+            return jsonify({'error': f'Prediction failed: {str(exc)}'}), 500
 
     except Exception as exc:
         return jsonify({'error': str(exc)}), 500
@@ -175,32 +177,6 @@ def health_check():
         'message': f'API running. Tabular: {"loaded" if agent.is_loaded else "not loaded"}, '
                    f'Multimodal: {"available" if multimodal_available else "unavailable"}'
     }), 200
-
-
-def _fallback_tabular(data):
-    distance = data['distance']
-    weather = float(data.get('weather_condition', 0))
-
-    if distance > 1 and weather >= 2:
-        severity = 3
-    elif distance > 0.5 or weather >= 1:
-        severity = 2
-    elif distance > 0.1:
-        severity = 1
-    else:
-        severity = 0
-
-    probability = min(0.7 + (distance * 0.1), 0.95)
-
-    result = {
-        'severity': severity,
-        'probability': probability,
-        'probabilities': [0.1, 0.1, 0.1, 0.1],
-        'feature_contributions': {'Distance(mi)': 0.5},
-        'message': 'Simulated prediction (model not loaded or inference error)'
-    }
-    result['probabilities'][severity] = probability
-    return jsonify(result), 200
 
 
 if __name__ == '__main__':

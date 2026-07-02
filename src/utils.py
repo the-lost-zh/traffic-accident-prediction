@@ -152,10 +152,50 @@ def print_metrics(metrics: Dict[str, float], title: str = "Model Performance"):
     print(f"{'='*50}\n")
 
 
-def print_classification_report(y_true: np.ndarray, y_pred: np.ndarray, 
+def print_classification_report(y_true: np.ndarray, y_pred: np.ndarray,
                                class_names: List[str] = None):
     print("\n分类报告:")
     print(classification_report(y_true, y_pred, target_names=class_names))
+
+
+def compute_majority_baseline(y_true: np.ndarray, num_classes: int = None) -> Dict[str, float]:
+    """计算"始终预测多数类"基线的各项指标。"""
+    if num_classes is None:
+        num_classes = len(np.unique(y_true))
+    counts = np.bincount(y_true, minlength=num_classes)
+    majority_class = int(np.argmax(counts))
+    y_pred = np.full_like(y_true, majority_class)
+    metrics = calculate_metrics(y_true, y_pred)
+    metrics["majority_class"] = float(majority_class)
+    metrics["majority_pct"] = float(counts[majority_class] / len(y_true))
+    return metrics
+
+
+def print_baseline_comparison(model_metrics: Dict[str, float],
+                               baseline_metrics: Dict[str, float]):
+    """打印模型 vs 多数类基线的对比表。"""
+    print("\n" + "=" * 70)
+    print("模型 vs 多数类基线")
+    print("=" * 70)
+    print(f"基线策略: 始终预测 Severity {int(baseline_metrics['majority_class']) + 1}")
+    print(f"多数类占比: {baseline_metrics['majority_pct']:.2%}")
+    print()
+    print(f"{'指标':<22s} {'基线':>15s} {'模型':>15s} {'提升':>12s}")
+    print("-" * 64)
+    for key, label in [
+        ("accuracy", "Accuracy"),
+        ("f1_macro", "F1 (macro)"),
+        ("f1_weighted", "F1 (weighted)"),
+        ("recall_macro", "Recall (macro)"),
+        ("precision_macro", "Precision (macro)"),
+    ]:
+        b, m = baseline_metrics[key], model_metrics[key]
+        delta = m - b
+        print(f"{label:<22s} {b:>15.4f} {m:>15.4f} {delta:>+12.4f}")
+    print("-" * 64)
+    if model_metrics.get("f1_macro", 0) <= baseline_metrics.get("f1_macro", 0):
+        print("⚠  WARNING: 模型 macro-F1 未超过多数类基线，accuracy 在此数据集上没有参考价值。")
+    print("=" * 70)
 
 
 def plot_feature_importance(feature_importance: np.ndarray,

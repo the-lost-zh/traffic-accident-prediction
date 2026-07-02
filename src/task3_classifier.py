@@ -8,7 +8,7 @@ from typing import Dict, List, Tuple, Optional
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from utils import set_seed, get_device, calculate_metrics, plot_confusion_matrix, plot_training_history, save_model, print_metrics, print_classification_report, ensure_dir
+from utils import set_seed, get_device, calculate_metrics, plot_confusion_matrix, plot_training_history, save_model, print_metrics, print_classification_report, print_baseline_comparison, compute_majority_baseline, ensure_dir
 
 
 class LinearClassifier(nn.Module):
@@ -605,6 +605,10 @@ def train_classifier(X_train: np.ndarray, y_train: np.ndarray,
     print_metrics(train_metrics, "训练集性能")
     print_metrics(test_metrics, "测试集性能")
     
+    baseline_metrics = compute_majority_baseline(y_test, num_classes)
+    print_metrics(baseline_metrics, "多数类基线 (全预测多数类)")
+    print_baseline_comparison(test_metrics, baseline_metrics)
+
     class_names = [f'Severity {i+1}' for i in range(num_classes)]
     print_classification_report(y_test, y_pred, class_names)
     
