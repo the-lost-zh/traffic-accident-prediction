@@ -19,20 +19,20 @@ from agent import PredictiveAgent
 
 def parse_args():
     parser = argparse.ArgumentParser(description='交通事故损伤等级预测系统')
-    
+
     parser.add_argument('--data_path', type=str, default='../data/US_Accidents_March23.csv',
                        help='数据文件路径')
     parser.add_argument('--output_dir', type=str, default='../results',
                        help='输出目录')
     parser.add_argument('--skip_shap', action='store_true',
-                       help='跳过SHAP分析，直接使用已有特征')
+                       help='跳过SHAP分析（推荐: SHAP应作为训练后解释工具，不需预筛选特征）')
     parser.add_argument('--top_features', type=int, default=15,
                        help='SHAP分析选择的Top特征数量')
     parser.add_argument('--shap_model_type', type=str, default='rf',
                        choices=['rf', 'nn'],
                        help='SHAP分析使用的模型类型')
-    parser.add_argument('--model_type', type=str, default='linear',
-                       choices=['linear', 'mlp', 'transformer'],
+    parser.add_argument('--model_type', type=str, default='fttransformer',
+                       choices=['linear', 'mlp', 'transformer', 'fttransformer'],
                        help='分类器模型类型')
     parser.add_argument('--epochs', type=int, default=100,
                        help='训练轮数')
@@ -43,11 +43,11 @@ def parse_args():
     parser.add_argument('--dropout', type=float, default=0.3,
                        help='Dropout率')
     parser.add_argument('--use_selected_features', action='store_true',
-                       help='使用SHAP选择的特征进行训练')
+                       help='使用SHAP预筛选特征训练（不推荐: 会丢失高阶特征交互信息）')
     parser.add_argument('--seed', type=int, default=42,
                        help='随机种子')
     parser.add_argument('--train_gan', action='store_true',
-                       help='训练GAN模型')
+                       help='训练GAN模型（不推荐: SMOTE/Focal Loss 性价比更高）')
     parser.add_argument('--gan_epochs', type=int, default=100,
                        help='GAN训练轮数')
     parser.add_argument('--gan_batch_size', type=int, default=128,
@@ -56,7 +56,15 @@ def parse_args():
                        help='GAN潜在空间维度')
     parser.add_argument('--gan_learning_rate', type=float, default=0.0002,
                        help='GAN学习率')
-    
+    parser.add_argument('--focal_loss', action='store_true',
+                       help='启用 Focal Loss 处理类别不平衡 (FT-Transformer 默认启用)')
+    parser.add_argument('--no_focal_loss', action='store_true',
+                       help='显式禁用 Focal Loss (即使是 FT-Transformer)')
+    parser.add_argument('--focal_gamma', type=float, default=2.0,
+                       help='Focal Loss gamma 参数 (默认 2.0)')
+    parser.add_argument('--use_smote', action='store_true',
+                       help='对训练集少数类进行 SMOTE 过采样')
+
     return parser.parse_args()
 
 
@@ -83,9 +91,10 @@ def main():
     
     print("\n[步骤 2/4] SHAP特征分析")
     print("-"*70)
-    
-    if args.skip_shap:
-        print("跳过SHAP分析，使用全部特征")
+
+    if args.skip_shap or not args.use_selected_features:
+        print("使用全部特征进行训练 (推荐: SHAP 更适合作为训练后解释工具)")
+        print("如需 SHAP 预筛选特征，使用 --use_selected_features 参数")
         selected_features = data_dict['feature_names']
         feature_indices = list(range(len(selected_features)))
         shap_results = None
@@ -109,6 +118,14 @@ def main():
     config['batch_size'] = args.batch_size
     config['learning_rate'] = args.learning_rate
     config['dropout'] = args.dropout
+
+    if args.focal_loss:
+        config['use_focal_loss'] = True
+    if args.no_focal_loss:
+        config['use_focal_loss'] = False
+        config['_focal_explicitly_disabled'] = True
+    config['focal_gamma'] = args.focal_gamma
+    config['use_smote'] = args.use_smote
     
     if args.use_selected_features and not args.skip_shap:
         print(f"使用SHAP选择的 {len(selected_features)} 个特征进行训练")

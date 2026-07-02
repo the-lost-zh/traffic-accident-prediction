@@ -13,6 +13,9 @@ from utils import (
     print_metrics,
     ensure_dir,
     plot_confusion_matrix,
+    compute_majority_baseline,
+    compute_xgboost_baseline,
+    print_full_comparison,
 )
 
 
@@ -20,38 +23,9 @@ DATA_PATH = "../data/US_Accidents_March23.csv"
 OUTPUT_DIR = "../results"
 MODEL_TYPE = "mlp"
 MODEL_PATH = os.path.join(OUTPUT_DIR, f"{MODEL_TYPE}_model.pth")
-USE_SELECTED_FEATURES = True
+USE_SELECTED_FEATURES = False  # 默认使用全特征，SHAP 仅作训练后解释
 TOP_FEATURES = 15
 SHAP_MODEL_TYPE = "rf"
-
-
-def majority_baseline_metrics(y_true, num_classes=4):
-    """Compute metrics if model always predicts the majority class."""
-    counts = np.bincount(y_true, minlength=num_classes)
-    majority_class = int(np.argmax(counts))
-    y_pred = np.full_like(y_true, majority_class)
-    return {
-        "strategy": f"Always predict Severity {majority_class + 1}",
-        "majority_pct": float(counts[majority_class] / len(y_true)),
-        **calculate_metrics(y_true, y_pred),
-    }
-
-
-def print_per_class_metrics(y_true, y_pred, num_classes=4):
-    class_names = [f"Severity {i + 1}" for i in range(num_classes)]
-    print("\n" + "=" * 60)
-    print("Per-Class Metrics")
-    print("=" * 60)
-    print(classification_report(
-        y_true, y_pred, target_names=class_names, digits=4, zero_division=0
-    ))
-
-    cm = confusion_matrix(y_true, y_pred)
-    print("Confusion Matrix:")
-    header = "         " + "".join(f"Pred {c:>8s}" for c in class_names)
-    print(header)
-    for i, row in enumerate(cm):
-        print(f"True {class_names[i]:>8s}  " + "".join(f"{v:>13d}" for v in row))
 
 
 def main():
@@ -72,16 +46,21 @@ def main():
     data = preprocessor.preprocess()
     X_test, y_test = data["X_test"], data["y_test"]
 
-    print("\n[2/4] 多数类基线评估 (Majority-Class Baseline)")
-    baseline = majority_baseline_metrics(y_test)
-    print(f"  策略: {baseline['strategy']}")
-    print(f"  多数类占比: {baseline['majority_pct']:.4f} ({baseline['majority_pct'] * 100:.1f}%)")
-    print(f"  基线 Accuracy: {baseline['accuracy']:.4f}")
-    print(f"  基线 Macro-F1:  {baseline['f1_macro']:.4f}")
-    print(f"  基线 Weighted-F1: {baseline['f1_weighted']:.4f}")
+    print("\n[2/5] 基线评估")
+    majority_bl = compute_majority_baseline(y_test)
+    print(f"  多数类基线: {majority_bl['strategy']}")
+    print(f"    占比: {majority_bl['majority_pct']:.2%}, "
+          f"Acc: {majority_bl['accuracy']:.4f}, Macro-F1: {majority_bl['f1_macro']:.4f}")
+
+    print("  训练 XGBoost 基线...")
+    # Use training data (first split) for XGBoost
+    xgb_bl = compute_xgboost_baseline(data["X_train"], data["y_train"], X_test, y_test)
+    if xgb_bl:
+        print(f"  XGBoost 基线: {xgb_bl['method']}")
+        print(f"    Acc: {xgb_bl['accuracy']:.4f}, Macro-F1: {xgb_bl['f1_macro']:.4f}")
 
     if USE_SELECTED_FEATURES:
-        print("\n[3/4] 运行 SHAP 分析以获取相同的特征子集")
+        print("\n[3/5] 运行 SHAP 分析以获取相同的特征子集")
         shap_results = run_shap_analysis(
             data, top_n=TOP_FEATURES, model_type=SHAP_MODEL_TYPE, output_dir=OUTPUT_DIR
         )
@@ -89,10 +68,10 @@ def main():
         X_test = X_test[:, feature_indices]
         print(f"使用 SHAP 选择的特征数量: {len(feature_indices)}")
     else:
-        print("\n[3/4] 跳过 SHAP，使用全部特征")
+        print("\n[3/5] 跳过 SHAP，使用全部特征")
         feature_indices = None
 
-    print("\n[4/4] 构建模型并加载已训练权重")
+    print("\n[4/5] 构建模型并加载已训练权重")
     config = get_default_config()
     input_dim = X_test.shape[1]
     num_classes = len(np.unique(y_test))
@@ -119,7 +98,13 @@ def main():
     print_metrics(model_metrics, "模型 — 测试集性能")
 
     # Per-class breakdown
-    print_per_class_metrics(y_test, y_pred, num_classes=num_classes)
+    from utils import print_classification_report
+    class_names = [f"Severity {i + 1}" for i in range(num_classes)]
+    print_classification_report(y_test, y_pred, class_names)
+    cm = confusion_matrix(y_test, y_pred)
+    print("Confusion Matrix:")
+    for i, row in enumerate(cm):
+        print(f"  True {class_names[i]:>10s}: {list(row)}")
 
     # Confusion matrix plot
     class_names = [f"Severity {i + 1}" for i in range(num_classes)]
@@ -128,29 +113,25 @@ def main():
         save_path=os.path.join(OUTPUT_DIR, f"{MODEL_TYPE}_confusion_matrix.png")
     )
 
-    # Comparison summary
-    print("\n" + "=" * 60)
-    print("模型 vs 多数类基线 — 对比")
-    print("=" * 60)
-    print(f"{'指标':<22s} {'基线 (全预测多数类)':>22s} {'模型':>22s} {'提升':>10s}")
-    print("-" * 76)
-    for key, label in [
-        ("accuracy", "Accuracy"),
-        ("f1_macro", "F1 (macro)"),
-        ("f1_weighted", "F1 (weighted)"),
-        ("recall_macro", "Recall (macro)"),
-        ("precision_macro", "Precision (macro)"),
-    ]:
-        base_val = baseline[key]
-        model_val = model_metrics[key]
-        delta = model_val - base_val
-        print(f"{label:<22s} {base_val:>22.4f} {model_val:>22.4f} {delta:>+10.4f}")
+    # Multi-baseline comparison
+    baselines = {"Majority": majority_bl}
+    if xgb_bl:
+        baselines["XGBoost"] = xgb_bl
+    print_full_comparison(model_metrics, baselines)
 
-    gain = model_metrics["f1_macro"] - baseline["f1_macro"]
+    gain = model_metrics["f1_macro"] - max(
+        majority_bl["f1_macro"],
+        xgb_bl["f1_macro"] if xgb_bl else 0,
+    )
     if gain <= 0:
-        print("\n⚠  WARNING: 模型 macro-F1 未超过多数类基线。")
-        print("  在严重类别不平衡的情况下，accuracy 没有参考价值。")
-        print("  建议: 增大 class weights、使用 Focal Loss、或对少数类过采样。")
+        print("\n⚠  WARNING: 模型 macro-F1 未超过所有基线。")
+        print("  深度学习模型在此数据集上可能不必要。")
+        print("  建议: 优先使用 XGBoost/CatBoost，或添加 Focal Loss 提升 minority class recall。")
+
+    print("\n[5/5] SHAP 后置解释 (Post-hoc Explanation)")
+    print("  提示: 使用 SHAP 在已训练模型上解释预测，而非预筛选特征。")
+    print(f"  运行: python task1_shap_analysis.py 进行完整 SHAP 分析")
+    print(f"  特征重要性图: {os.path.join(OUTPUT_DIR, 'feature_importance.png')}")
 
     print("\n评估完成。")
 

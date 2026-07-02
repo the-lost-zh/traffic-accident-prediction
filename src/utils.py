@@ -171,31 +171,102 @@ def compute_majority_baseline(y_true: np.ndarray, num_classes: int = None) -> Di
     return metrics
 
 
-def print_baseline_comparison(model_metrics: Dict[str, float],
-                               baseline_metrics: Dict[str, float]):
-    """打印模型 vs 多数类基线的对比表。"""
-    print("\n" + "=" * 70)
-    print("模型 vs 多数类基线")
-    print("=" * 70)
-    print(f"基线策略: 始终预测 Severity {int(baseline_metrics['majority_class']) + 1}")
-    print(f"多数类占比: {baseline_metrics['majority_pct']:.2%}")
+def compute_xgboost_baseline(X_train: np.ndarray, y_train: np.ndarray,
+                              X_test: np.ndarray, y_test: np.ndarray,
+                              n_estimators: int = 200, max_depth: int = 8) -> Dict[str, float]:
+    """使用 XGBoost 作为树模型基线，在不平衡表格数据上通常强于简单 MLP。"""
+    try:
+        import xgboost as xgb
+    except ImportError:
+        print("⚠ XGBoost not installed. Install with: pip install xgboost")
+        return None
+
+    num_classes = len(np.unique(y_train))
+    model = xgb.XGBClassifier(
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        learning_rate=0.1,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        objective="multi:softmax",
+        num_class=num_classes,
+        eval_metric="mlogloss",
+        random_state=42,
+        n_jobs=-1,
+    )
+    model.fit(X_train, y_train, verbose=False)
+    y_pred = model.predict(X_test)
+    metrics = calculate_metrics(y_test, y_pred)
+    metrics["method"] = f"XGBoost (n={n_estimators}, depth={max_depth})"
+    return metrics
+
+
+def apply_smote(X_train: np.ndarray, y_train: np.ndarray,
+                 random_state: int = 42) -> tuple:
+    """对训练集少数类进行 SMOTE 过采样。
+
+    注意: SMOTE 应仅应用于训练集，验证集和测试集保持原始分布。
+    返回过采样后的 (X_train, y_train)。
+    """
+    try:
+        from imblearn.over_sampling import SMOTE
+    except ImportError:
+        print("⚠ imbalanced-learn not installed. Install with: pip install imbalanced-learn")
+        return X_train, y_train
+
+    counts = np.bincount(y_train)
+    if max(counts) / min(counts) < 2.0:
+        print("  类别分布较均衡，跳过 SMOTE")
+        return X_train, y_train
+
+    smote = SMOTE(random_state=random_state, k_neighbors=min(5, min(counts) - 1))
+    X_res, y_res = smote.fit_resample(X_train, y_train)
+    new_counts = np.bincount(y_res)
+    print(f"  SMOTE: {counts.tolist()} → {new_counts.tolist()} (增加 {len(y_res) - len(y_train)} 样本)")
+    return X_res, y_res
+
+
+def print_full_comparison(model_metrics: Dict[str, float],
+                           baselines: Dict[str, Dict[str, float]]):
+    """打印模型 vs 多个基线的完整对比表。"""
+    print("\n" + "=" * 80)
+    print("模型 vs 基线 — 完整对比")
+    print("=" * 80)
+    for name, bl in baselines.items():
+        desc = bl.get("method", bl.get("strategy", name))
+        print(f"  {name}: {desc}")
     print()
-    print(f"{'指标':<22s} {'基线':>15s} {'模型':>15s} {'提升':>12s}")
-    print("-" * 64)
-    for key, label in [
+    header = f"{'指标':<22s}"
+    for name in baselines:
+        header += f" {name:>14s}"
+    header += f" {'模型':>14s}"
+    print(header)
+    print("-" * (22 + 16 * (len(baselines) + 1)))
+
+    metric_keys = [
         ("accuracy", "Accuracy"),
         ("f1_macro", "F1 (macro)"),
         ("f1_weighted", "F1 (weighted)"),
         ("recall_macro", "Recall (macro)"),
         ("precision_macro", "Precision (macro)"),
-    ]:
-        b, m = baseline_metrics[key], model_metrics[key]
-        delta = m - b
-        print(f"{label:<22s} {b:>15.4f} {m:>15.4f} {delta:>+12.4f}")
-    print("-" * 64)
-    if model_metrics.get("f1_macro", 0) <= baseline_metrics.get("f1_macro", 0):
-        print("⚠  WARNING: 模型 macro-F1 未超过多数类基线，accuracy 在此数据集上没有参考价值。")
-    print("=" * 70)
+    ]
+    for key, label in metric_keys:
+        row = f"{label:<22s}"
+        best_baseline = -1.0
+        for name in baselines:
+            val = baselines[name].get(key, 0)
+            row += f" {val:>14.4f}"
+            if val > best_baseline:
+                best_baseline = val
+        model_val = model_metrics.get(key, 0)
+        delta = model_val - best_baseline
+        symbol = "✓" if delta > 0 else "✗"
+        row += f" {model_val:>14.4f} {symbol}"
+        print(row)
+
+    print("-" * (22 + 16 * (len(baselines) + 1)))
+    print(f"  ✓ = 超过最佳基线    ✗ = 未超过最佳基线")
+    print("=" * 80)
 
 
 def plot_feature_importance(feature_importance: np.ndarray,

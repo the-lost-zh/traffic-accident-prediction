@@ -8,7 +8,7 @@ from typing import Dict, List, Tuple, Optional
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from utils import set_seed, get_device, calculate_metrics, plot_confusion_matrix, plot_training_history, save_model, print_metrics, print_classification_report, print_baseline_comparison, compute_majority_baseline, ensure_dir
+from utils import set_seed, get_device, calculate_metrics, plot_confusion_matrix, plot_training_history, save_model, print_metrics, print_classification_report, print_full_comparison, compute_majority_baseline, apply_smote, ensure_dir
 
 
 class LinearClassifier(nn.Module):
@@ -237,17 +237,54 @@ class FTTransformerClassifier(nn.Module):
             return feature_importance
 
 
+class FocalLoss(nn.Module):
+    """Focal Loss for imbalanced classification.
+
+    FL(p_t) = -α_t * (1 - p_t)^γ * log(p_t)
+
+    γ=0 → standard cross-entropy; γ=2 focuses on hard/misclassified examples.
+    α can be class weights or a single scalar for the rare class.
+    """
+    def __init__(self, alpha=None, gamma: float = 2.0, reduction: str = 'mean'):
+        super().__init__()
+        self.alpha = alpha  # Tensor of class weights or None
+        self.gamma = gamma
+        self.reduction = reduction
+
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        ce_loss = nn.functional.cross_entropy(inputs, targets, reduction='none')
+        pt = torch.exp(-ce_loss)
+        focal_loss = (1 - pt) ** self.gamma * ce_loss
+
+        if self.alpha is not None:
+            if self.alpha.device != inputs.device:
+                self.alpha = self.alpha.to(inputs.device)
+            at = self.alpha.gather(0, targets)
+            focal_loss = at * focal_loss
+
+        if self.reduction == 'mean':
+            return focal_loss.mean()
+        elif self.reduction == 'sum':
+            return focal_loss.sum()
+        return focal_loss
+
+
 class ModelTrainer:
     def __init__(self, model: nn.Module, config: Dict, device: torch.device):
         self.model = model.to(device)
         self.config = config
         self.device = device
         label_smoothing = config.get('label_smoothing', 0.0)
-        
-        # Handle class weights for imbalanced datasets
-        class_weights = config.get('class_weights', None)
-        if class_weights is not None:
-            weight_tensor = torch.FloatTensor(class_weights).to(device)
+        use_focal = config.get('use_focal_loss', False)
+        focal_gamma = config.get('focal_gamma', 2.0)
+
+        if use_focal:
+            class_weights = config.get('class_weights', None)
+            alpha = torch.FloatTensor(class_weights) if class_weights else None
+            self.criterion = FocalLoss(alpha=alpha, gamma=focal_gamma)
+            print(f"使用 Focal Loss (γ={focal_gamma})")
+        elif config.get('class_weights', None) is not None:
+            weight_tensor = torch.FloatTensor(config['class_weights']).to(device)
             self.criterion = nn.CrossEntropyLoss(weight=weight_tensor, label_smoothing=label_smoothing)
         else:
             self.criterion = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
@@ -548,7 +585,10 @@ def get_default_config() -> Dict:
         'dim_feedforward': 256,
         'label_smoothing': 0.0,
         'weight_decay': 1e-5,
-        'warmup_epochs': 0
+        'warmup_epochs': 0,
+        'use_focal_loss': False,
+        'focal_gamma': 2.0,
+        'use_smote': False,
     }
 
 
@@ -565,11 +605,19 @@ def train_classifier(X_train: np.ndarray, y_train: np.ndarray,
 
     if config is None:
         config = get_default_config()
-    # FT-Transformer 推荐：warmup + label_smoothing 提高准确率
+    # FT-Transformer 推荐: warmup + focal_loss 处理不平衡
     if model_type == 'fttransformer':
         config.setdefault('warmup_epochs', 5)
         config.setdefault('label_smoothing', 0.1)
         config.setdefault('weight_decay', 1e-4)
+        # 数据集严重不平衡时默认启用 Focal Loss
+        if not config.get('use_focal_loss') and not config.get('_focal_explicitly_disabled'):
+            config.setdefault('use_focal_loss', True)
+
+    # SMOTE 过采样（仅训练集）
+    X_train_original, y_train_original = X_train.copy(), y_train.copy()
+    if config.get('use_smote', False):
+        X_train, y_train = apply_smote(X_train, y_train, random_state=42)
 
     num_classes = len(np.unique(y_train))
     input_dim = X_train.shape[1]
@@ -607,7 +655,15 @@ def train_classifier(X_train: np.ndarray, y_train: np.ndarray,
     
     baseline_metrics = compute_majority_baseline(y_test, num_classes)
     print_metrics(baseline_metrics, "多数类基线 (全预测多数类)")
-    print_baseline_comparison(test_metrics, baseline_metrics)
+    baselines = {"Majority": baseline_metrics}
+
+    # XGBoost baseline (on original data, without SMOTE or Focal Loss)
+    from utils import compute_xgboost_baseline
+    xgb_bl = compute_xgboost_baseline(X_train_original, y_train_original, X_test, y_test)
+    if xgb_bl:
+        baselines["XGBoost"] = xgb_bl
+
+    print_full_comparison(test_metrics, baselines)
 
     class_names = [f'Severity {i+1}' for i in range(num_classes)]
     print_classification_report(y_test, y_pred, class_names)
