@@ -161,17 +161,23 @@ class MultimodalPredictiveAgent:
             return self._encode_image(image_path)
         return None
 
-    def _encode_tabular(self, data: dict[str, Any]) -> np.ndarray:
+    def _encode_tabular(self, data: dict[str, Any]) -> np.ndarray | None:
         encoder = self._encoders.get("tabular")
         if encoder is None:
-            raise RuntimeError("Tabular encoder not loaded")
-        features, _ = encoder.preprocess_input(data)
-        return features
+            print("  [tabular] encoder not loaded — skipping tabular modality")
+            return None
+        try:
+            features, _ = encoder.preprocess_input(data)
+            return features
+        except Exception as exc:
+            print(f"  [tabular] encoding failed: {exc} — skipping")
+            return None
 
-    def _encode_text(self, text: str) -> np.ndarray:
+    def _encode_text(self, text: str) -> np.ndarray | None:
         encoder_info = self._encoders.get("text")
         if encoder_info is None:
-            raise RuntimeError("Text encoder not loaded")
+            print("  [text] encoder not loaded — skipping text modality")
+            return None
 
         encoder_type = encoder_info.get("encoder", "tfidf")
         if encoder_type == "tfidf":
@@ -191,10 +197,11 @@ class MultimodalPredictiveAgent:
             raise ValueError(f"Unknown text encoder: {encoder_type}")
         return features
 
-    def _encode_image(self, image_path: str | Path) -> np.ndarray:
+    def _encode_image(self, image_path: str | Path) -> np.ndarray | None:
         encoder_info = self._encoders.get("image")
         if encoder_info is None:
-            raise RuntimeError("Image encoder not loaded")
+            print("  [image] encoder not loaded — skipping image modality")
+            return None
 
         encoder_type = encoder_info.get("encoder", "color")
         if encoder_type == "color":

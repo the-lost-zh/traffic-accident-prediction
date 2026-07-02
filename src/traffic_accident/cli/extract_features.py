@@ -6,14 +6,29 @@ from typing import Any
 
 import pandas as pd
 
-from traffic_accident.features import save_image_feature_artifacts, save_text_feature_artifacts
+from traffic_accident.features import (
+    save_image_feature_artifacts,
+    save_tabular_feature_artifacts,
+    save_text_feature_artifacts,
+)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Extract feature matrices for unpaired multimodal training.")
     subparsers = parser.add_subparsers(dest="modality", required=True)
 
-    text_parser = subparsers.add_parser("text", help="Extract TF-IDF text features from a CSV column.")
+    tabular_parser = subparsers.add_parser("tabular", help="Preprocess tabular CSV and save features as .npy.")
+    tabular_parser.add_argument("--input_csv", type=str, required=True)
+    tabular_parser.add_argument("--output_dir", type=str, required=True)
+    tabular_parser.add_argument("--target_col", type=str, default="Severity")
+    tabular_parser.add_argument("--train_ratio", type=float, default=0.7)
+    tabular_parser.add_argument("--val_ratio", type=float, default=0.15)
+    tabular_parser.add_argument("--test_ratio", type=float, default=0.15)
+    tabular_parser.add_argument("--random_state", type=int, default=42)
+    tabular_parser.add_argument("--max_missing_ratio", type=float, default=0.5)
+    tabular_parser.add_argument("--max_categorical_unique_ratio", type=float, default=0.05)
+
+    text_parser = subparsers.add_parser("text", help="Extract text features from a CSV column.")
     text_parser.add_argument("--input_csv", type=str, required=True)
     text_parser.add_argument("--text_column", type=str, required=True)
     text_parser.add_argument("--label_column", type=str, default=None)
@@ -47,6 +62,23 @@ def main() -> dict[str, Any]:
 
 
 def run_extraction(args: argparse.Namespace) -> dict[str, Any]:
+    if args.modality == "tabular":
+        metadata = save_tabular_feature_artifacts(
+            data_path=args.input_csv,
+            output_dir=args.output_dir,
+            target_col=getattr(args, "target_col", "Severity"),
+            train_ratio=getattr(args, "train_ratio", 0.7),
+            val_ratio=getattr(args, "val_ratio", 0.15),
+            test_ratio=getattr(args, "test_ratio", 0.15),
+            random_state=getattr(args, "random_state", 42),
+            max_missing_ratio=getattr(args, "max_missing_ratio", 0.5),
+            max_categorical_unique_ratio=getattr(args, "max_categorical_unique_ratio", 0.05),
+        )
+        print(f"Feature directory: {Path(args.output_dir)}")
+        print(f"Feature dimension: {metadata['feature_dim']}")
+        print(f"Samples: {metadata['num_samples']}")
+        return metadata
+
     df = pd.read_csv(args.input_csv)
     if args.modality == "text":
         metadata = save_text_feature_artifacts(
