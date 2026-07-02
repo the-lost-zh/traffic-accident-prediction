@@ -6,12 +6,12 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from traffic_accident.features.labels import encode_labels
-from traffic_accident.features.vision_language import (
+from multimodal.labels import encode_labels
+from multimodal.vision_language import (
     extract_vision_language_image_features,
     resolve_vision_language_model_name,
 )
-from traffic_accident.utils.io import ensure_dir, save_json
+from utils import ensure_dir, save_json
 
 
 def extract_image_features(image_paths: list[str | Path], image_root: str | Path | None = None, bins: int = 16) -> np.ndarray:

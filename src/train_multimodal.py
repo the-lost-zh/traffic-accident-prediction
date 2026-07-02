@@ -37,15 +37,14 @@ _src_dir = os.path.dirname(os.path.abspath(__file__))
 if _src_dir not in sys.path:
     sys.path.insert(0, _src_dir)
 
-from traffic_accident.config import flatten_cli_config, load_config
-from traffic_accident.data.multimodal import ModalityFeatureDataset
-from traffic_accident.models.multimodal import UnifiedMultimodalTransformerClassifier
-from traffic_accident.training.multimodal import (
+from multimodal.config_loader import flatten_cli_config, load_config
+from multimodal.data import ModalityFeatureDataset
+from multimodal.model import UnifiedMultimodalTransformerClassifier
+from multimodal.trainer import (
     MultimodalTrainingConfig,
     UnpairedMultimodalTrainer,
 )
-from traffic_accident.utils.io import ensure_dir, load_json, save_json
-from traffic_accident.utils.seed import set_seed
+from utils import ensure_dir, set_seed, load_json, save_json
 
 
 def parse_args() -> argparse.Namespace:
@@ -212,7 +211,25 @@ def main() -> dict[str, Any]:
     print(f"训练: epochs={args.epochs}, batch_size={args.batch_size}, "
           f"lr={args.learning_rate}")
 
-    from traffic_accident.utils.paths import make_run_paths
+    from datetime import datetime
+    from dataclasses import dataclass
+
+    @dataclass(frozen=True)
+    class RunPaths:
+        root: Path; checkpoints: Path; metrics: Path; figures: Path; artifacts: Path
+
+    def make_run_paths(output_root, run_name=None):
+        base = Path(output_root)
+        run_id = run_name or datetime.now().strftime("%Y%m%d_%H%M%S")
+        root = base / run_id
+        return RunPaths(
+            root=root,
+            checkpoints=root / "checkpoints",
+            metrics=root / "metrics",
+            figures=root / "figures",
+            artifacts=root / "artifacts",
+        )
+
     run_paths = make_run_paths(args.output_root, args.run_name)
     for directory in [run_paths.checkpoints, run_paths.metrics, run_paths.artifacts]:
         ensure_dir(directory)

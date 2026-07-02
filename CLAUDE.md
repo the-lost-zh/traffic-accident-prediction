@@ -11,29 +11,44 @@ Traffic accident severity prediction system using multi-modal representation lea
 ```bash
 # Install dependencies
 pip install -r requirements.txt
+pip install xgboost imbalanced-learn  # optional: baselines + SMOTE
 
 # Train a model (cd src first — all paths in train.py are relative to src/)
 cd src
-python train.py --model_type mlp --use_selected_features
-python train.py --model_type fttransformer --epochs 50 --train_gan
+
+# Recommended: FT-Transformer with Focal Loss (default for imbalance)
+python train.py --model_type fttransformer --epochs 50
+
+# With SMOTE oversampling
+python train.py --model_type fttransformer --use_smote
+
+# Without Focal Loss
+python train.py --model_type fttransformer --no_focal_loss
+
+# Other models
+python train.py --model_type mlp
 python train.py --model_type transformer --batch_size 128
 
 # Train FT-Transformer (dedicated script with extra visualization)
 python train_fttransformer.py --model_type fttransformer --epochs 50
 
-# Evaluate a trained model on the test set (edit MODEL_TYPE in script first)
+# Evaluate (includes Majority + XGBoost baselines + per-class metrics)
 python eval_on_test.py
+
+# Multimodal training (extract features first, then train)
+python multimodal/extract_features.py text --input_csv ... --output_dir ...
+python train_multimodal.py --config ../configs/multimodal_unpaired.yaml
 
 # Start the Flask API server (port 8888)
 python api/app.py
+# Multimodal API
+MULTIMODAL_RUN_DIR=../outputs/multimodal_runs/multimodal_unpaired python api/app.py
 
 # Run SHAP analysis standalone
 python task1_shap_analysis.py
 
 # Run tests (from project root)
 python -m pytest tests/ -v
-# Or a single test file
-python -m pytest tests/test_models.py -v
 
 # Launch Jupyter notebook
 cd notebook && jupyter notebook traffic_accident_analysis.ipynb
@@ -69,15 +84,25 @@ CSV → DataPreprocessor (missing values → type detection → encoding → sca
 
 ### Entry Points
 
-- `src/train.py` — main CLI orchestrating all 3 tasks sequentially (preprocess → SHAP → classify → GAN → save agent)
-- `src/train_fttransformer.py` — dedicated FT-Transformer training with extra attention visualization
-- `src/eval_on_test.py` — loads a saved model and evaluates on the test split (must edit MODE_TYPE constant in the script)
-- `api/app.py` — Flask server on port 8888, serves `/api/predict` (POST) and `/api/health` (GET)
-- `frontend/index.html` — standalone HTML form that POSTs to the API
+- `src/train.py` — main CLI (preprocess → train classifier → optional GAN → save agent). Default: FT-Transformer + Focal Loss
+- `src/train_fttransformer.py` — dedicated FT-Transformer training with attention visualization
+- `src/train_multimodal.py` — unpaired multimodal training (tabular + text + image)
+- `src/eval_on_test.py` — evaluates saved model against Majority + XGBoost baselines, prints per-class metrics
+- `api/app.py` — Flask server on port 8888, serves `/api/predict` (POST), `/api/predict/multimodal` (POST), `/api/health` (GET)
+- `frontend/index.html` — tabular prediction + multimodal prediction (mode tabs)
+
+### Multimodal Package (`src/multimodal/`)
+
+- `model.py` — `UnifiedMultimodalTransformerClassifier` with per-modality projectors + shared backbone
+- `trainer.py` — `UnpairedMultimodalTrainer` using round-robin modality batch cycling
+- `data.py` — `ModalityFeatureDataset`, `ModalityBatch`, `make_modality_loaders`
+- `vision_language.py` — CLIP/SigLIP text and image encoders
+- `text_features.py`, `image_features.py` — TF-IDF, color histogram feature extraction
+- `config_loader.py` — YAML/JSON config parsing
 
 ### Config System
 
-YAML configs in `configs/` define data paths, model hyperparameters, training settings, and split ratios. `tabular_mlp.yaml` covers the single-modality MLP case; `multimodal_unpaired.yaml` defines the unpaired multi-modal fusion setup (tabular + image + text, each with its own projector type and encoder). The code also uses `get_default_config()` in `task3_classifier.py` as a fallback.
+`configs/multimodal_unpaired.yaml` defines the unpaired multi-modal fusion setup. For tabular training, use CLI args or `get_default_config()` in `task3_classifier.py`.
 
 ### Important Conventions
 

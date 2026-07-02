@@ -21,9 +21,9 @@ _src_dir = os.path.dirname(os.path.abspath(__file__))
 if _src_dir not in sys.path:
     sys.path.insert(0, _src_dir)
 
-from traffic_accident.data.multimodal import ModalityFeatureDataset
-from traffic_accident.models.multimodal import UnifiedMultimodalTransformerClassifier
-from traffic_accident.utils.io import load_json
+from multimodal.data import ModalityFeatureDataset
+from multimodal.model import UnifiedMultimodalTransformerClassifier
+from utils import load_json
 
 
 class MultimodalPredictiveAgent:
@@ -184,7 +184,7 @@ class MultimodalPredictiveAgent:
             vectorizer = encoder_info["vectorizer"]
             features = vectorizer.transform([text]).astype(np.float32).toarray()
         elif encoder_type in ("clip", "siglip"):
-            from traffic_accident.features.vision_language import extract_vision_language_text_features
+            from multimodal.vision_language import extract_vision_language_text_features
             model_name = encoder_info.get("model_name")
             features = extract_vision_language_text_features(
                 [text],
@@ -205,10 +205,10 @@ class MultimodalPredictiveAgent:
 
         encoder_type = encoder_info.get("encoder", "color")
         if encoder_type == "color":
-            from traffic_accident.features.image import extract_image_features
+            from multimodal.image_features import extract_image_features
             features = extract_image_features([image_path], image_root=encoder_info.get("image_root"))
         elif encoder_type in ("clip", "siglip"):
-            from traffic_accident.features.vision_language import extract_vision_language_image_features
+            from multimodal.vision_language import extract_vision_language_image_features
             model_name = encoder_info.get("model_name")
             features = extract_vision_language_image_features(
                 [image_path],

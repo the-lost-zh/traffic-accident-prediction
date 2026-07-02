@@ -1,3 +1,4 @@
+"""Minimal YAML/JSON config loader for multimodal training."""
 from __future__ import annotations
 
 import json
@@ -15,26 +16,22 @@ def load_config(path: str | Path) -> dict[str, Any]:
             try:
                 import yaml
             except ImportError as exc:
-                raise RuntimeError("YAML config files require PyYAML. Install it or use a JSON config.") from exc
+                raise RuntimeError("YAML config files require PyYAML.") from exc
             data = yaml.safe_load(f) or {}
         else:
             raise ValueError(f"Unsupported config file type: {config_path.suffix}")
-
     if not isinstance(data, dict):
-        raise ValueError(f"Config file must contain a mapping at the top level: {config_path}")
+        raise ValueError(f"Config file must contain a mapping: {config_path}")
     return data
 
 
 def flatten_cli_config(config: dict[str, Any]) -> dict[str, Any]:
-    """Flatten common grouped config sections into argparse-compatible defaults."""
     flattened: dict[str, Any] = {}
-    passthrough_sections = {"training", "model", "split", "preprocessing"}
     for key, value in config.items():
-        if key in passthrough_sections and isinstance(value, dict):
+        if key in {"training", "model", "split", "preprocessing"} and isinstance(value, dict):
             flattened.update(value)
         else:
             flattened[key] = value
-
     if "hidden_dims" in flattened and isinstance(flattened["hidden_dims"], list):
         flattened["hidden_dims"] = ",".join(str(item) for item in flattened["hidden_dims"])
     return flattened

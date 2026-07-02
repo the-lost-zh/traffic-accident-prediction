@@ -6,7 +6,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import torch
 import os
 import pickle
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -127,6 +127,20 @@ def load_model(model: torch.nn.Module, load_path: str, device: torch.device):
 def save_data(data: Dict, save_path: str):
     with open(save_path, 'wb') as f:
         pickle.dump(data, f)
+
+
+def save_json(data: Any, save_path: str) -> str:
+    import json
+    os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+    with open(save_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    return save_path
+
+
+def load_json(load_path: str) -> Any:
+    import json
+    with open(load_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
     print(f"数据已保存至: {save_path}")
 
 

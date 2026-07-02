@@ -7,12 +7,12 @@ import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from traffic_accident.features.labels import encode_labels
-from traffic_accident.features.vision_language import (
+from multimodal.labels import encode_labels
+from multimodal.vision_language import (
     extract_vision_language_text_features,
     resolve_vision_language_model_name,
 )
-from traffic_accident.utils.io import ensure_dir, save_json, save_pickle
+from utils import ensure_dir, save_json, save_data as save_pickle
 
 
 def extract_text_features(

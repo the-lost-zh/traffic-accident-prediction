@@ -8,9 +8,8 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
-from traffic_accident.data import ModalityBatch, ModalityFeatureDataset, make_modality_loaders, round_robin_modality_batches
-from traffic_accident.evaluation import calculate_metrics
-from traffic_accident.utils.io import ensure_dir, save_json
+from multimodal.data import ModalityBatch, ModalityFeatureDataset, make_modality_loaders, round_robin_modality_batches
+from utils import calculate_metrics, ensure_dir, save_json
 
 
 @dataclass
