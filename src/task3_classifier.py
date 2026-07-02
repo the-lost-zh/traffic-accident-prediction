@@ -7,8 +7,8 @@ from tqdm import tqdm
 from typing import Dict, List, Tuple, Optional
 import os
 import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.utils import set_seed, get_device, calculate_metrics, plot_confusion_matrix, plot_training_history, save_model, print_metrics, print_classification_report, ensure_dir
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from utils import set_seed, get_device, calculate_metrics, plot_confusion_matrix, plot_training_history, save_model, print_metrics, print_classification_report, ensure_dir
 
 
 class LinearClassifier(nn.Module):
@@ -300,7 +300,7 @@ class ModelTrainer:
                 
                 self.optimizer.step()
                 
-                total_loss += loss.item()
+                total_loss += loss.item() * batch_X.size(0)
                 _, predicted = torch.max(outputs.data, 1)
                 total += batch_y.size(0)
                 correct += (predicted == batch_y).sum().item()
@@ -312,8 +312,7 @@ class ModelTrainer:
                 pbar.set_postfix(loss=f"{current_loss:.4f}", acc=f"{current_acc:.4f}")
         
         # 若所有 batch 因 NaN/Inf 被跳过，total=0，避免除零
-        n_batches = len(train_loader)
-        avg_loss = total_loss / n_batches if n_batches else 0.0
+        avg_loss = total_loss / total if total > 0 else 0.0
         accuracy = (correct / total) if total > 0 else 0.0
         return avg_loss, accuracy
     

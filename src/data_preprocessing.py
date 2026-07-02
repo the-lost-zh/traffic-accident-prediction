@@ -82,10 +82,10 @@ class DataPreprocessor:
                 self.df = self.df.drop(columns=[col])
             elif self.df[col].dtype in ['int64', 'float64']:
                 median_val = self.df[col].median()
-                self.df[col].fillna(median_val, inplace=True)
+                self.df[col] = self.df[col].fillna(median_val)
             else:
                 mode_val = self.df[col].mode()[0] if not self.df[col].mode().empty else 'Unknown'
-                self.df[col].fillna(mode_val, inplace=True)
+                self.df[col] = self.df[col].fillna(mode_val)
         
         print(f"缺失值处理完成，剩余特征数: {len(self.df.columns)}")
     
@@ -101,6 +101,7 @@ class DataPreprocessor:
                 if unique_ratio < 0.05:
                     self.categorical_features.append(col)
                 else:
+                    print(f"丢弃高唯一性非数值列: {col} (唯一值比例: {unique_ratio:.2%})")
                     self.df = self.df.drop(columns=[col])
         
         print(f"\n数值型特征: {len(self.numeric_features)} 个")

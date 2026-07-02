@@ -3,20 +3,25 @@ from flask_cors import CORS
 import os
 import sys
 
-# 添加项目根目录到Python路径
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# 添加src目录到Python路径
+_src_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src')
+sys.path.append(_src_dir)
 
-from src.agent import PredictiveAgent
+from agent import PredictiveAgent
 
 app = Flask(__name__)
 CORS(app)  # 允许跨域请求
 
-# 初始化预测智能体
 agent = PredictiveAgent(model_dir='models')
+_model_type = os.environ.get('MODEL_TYPE', 'fttransformer')
 
-# 尝试加载智能体（模型、预处理器等）
-with app.app_context():
-    agent.load(model_type='fttransformer')
+
+def _ensure_agent():
+    """懒加载智能体，仅在首次请求时初始化。"""
+    if not agent.is_loaded:
+        model_dir = os.environ.get('MODEL_DIR', 'models')
+        agent.model_dir = model_dir
+        agent.load(model_type=_model_type)
 
 @app.route('/api/predict', methods=['POST'])
 def predict():
@@ -52,6 +57,8 @@ def predict():
             'Wind_Speed(mph)': data['wind_speed']
         }
         
+        _ensure_agent()
+
         # 尝试通过 Agent 推理（如果它已加载）
         if agent.is_loaded:
             try:
@@ -95,6 +102,7 @@ def predict():
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
+    _ensure_agent()
     status = 'healthy' if agent.is_loaded else 'degraded'
     return jsonify({
         'status': status, 
@@ -102,7 +110,10 @@ def health_check():
     }), 200
 
 if __name__ == '__main__':
+    debug = os.environ.get('FLASK_DEBUG', '0').lower() in ('1', 'true', 'yes')
+    host = os.environ.get('FLASK_HOST', '127.0.0.1')
+    port = int(os.environ.get('FLASK_PORT', '8888'))
     print('启动API服务器...')
-    print('API服务器运行在 http://localhost:8888')
-    app.run(host='0.0.0.0', port=8888, debug=True)
+    print(f'API服务器运行在 http://{host}:{port}')
+    app.run(host=host, port=port, debug=debug)
 

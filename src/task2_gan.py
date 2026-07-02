@@ -6,7 +6,8 @@ from torch.utils.data import DataLoader, TensorDataset
 from typing import Dict, Tuple, List
 from tqdm import tqdm
 import os
-
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils import get_device, set_seed
 
 
@@ -46,10 +47,9 @@ class Discriminator(nn.Module):
             layers.append(nn.Dropout(0.3))
         
         layers.append(nn.Linear(hidden_dims[-1], 1))
-        layers.append(nn.Sigmoid())
-        
+
         self.network = nn.Sequential(*layers)
-    
+
     def forward(self, x):
         return self.network(x)
 
@@ -61,7 +61,7 @@ class GANTrainer:
         self.config = config
         self.device = device
         
-        self.criterion = nn.BCELoss()
+        self.criterion = nn.BCEWithLogitsLoss()
         self.optimizer_G = optim.Adam(self.generator.parameters(), lr=config['learning_rate'], betas=(0.5, 0.999))
         self.optimizer_D = optim.Adam(self.discriminator.parameters(), lr=config['learning_rate'], betas=(0.5, 0.999))
         
@@ -120,9 +120,9 @@ class GANTrainer:
             g_loss.backward()
             self.optimizer_G.step()
             
-            # 计算准确率
-            correct_real += (real_outputs > 0.5).sum().item()
-            correct_fake += (fake_outputs < 0.5).sum().item()
+            # 计算准确率（sigmoid后与阈值比较）
+            correct_real += (torch.sigmoid(real_outputs) > 0.5).sum().item()
+            correct_fake += (torch.sigmoid(fake_outputs) < 0.5).sum().item()
             
             total_d_loss += d_loss.item()
             total_g_loss += g_loss.item()

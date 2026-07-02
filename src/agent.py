@@ -2,16 +2,17 @@ import os
 import joblib
 import torch
 import numpy as np
+import pandas as pd
 import shap
 from typing import Dict, Tuple, Any
 
 # Ensure we can import from src
 import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from src.data_preprocessing import DataPreprocessor
-from src.task3_classifier import create_model, get_default_config
-from src.utils import get_device
+from data_preprocessing import DataPreprocessor
+from task3_classifier import create_model, get_default_config
+from utils import get_device
 
 class PredictiveAgent:
     """
@@ -93,8 +94,7 @@ class PredictiveAgent:
         """将原始输入的字典数据转换为模型可接受的Tensor特征，并返回特征名顺序"""
         if not self.preprocessor:
             raise ValueError("预处理器未加载")
-            
-        import pandas as pd
+
         # 转为DataFrame单行
         df = pd.DataFrame([data_dict])
         

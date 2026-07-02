@@ -26,8 +26,8 @@ document.addEventListener('DOMContentLoaded', function() {
             wind_speed: parseFloat(formData.get('wind_speed'))
         };
         
-        // 发送API请求
-        fetch('http://localhost:8888/api/predict', {
+        const apiBase = window.API_BASE || 'http://localhost:8888';
+        fetch(`${apiBase}/api/predict`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
